@@ -28,8 +28,10 @@ class APIClient {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        // Increased timeouts for Render cold starts (free tier can take 30+ seconds to wake)
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 120
+        config.waitsForConnectivity = true
         self.session = URLSession(configuration: config)
     }
 
@@ -38,7 +40,8 @@ class APIClient {
     func request<T: Decodable>(_ endpoint: String,
                                 method: HTTPMethod = .GET,
                                 body: Encodable? = nil,
-                                requiresAuth: Bool = false) async throws -> T {
+                                requiresAuth: Bool = false,
+                                retryCount: Int = 1) async throws -> T {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
         }
@@ -57,7 +60,16 @@ class APIClient {
             request.httpBody = try encoder.encode(body)
         }
 
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError where error.code == .timedOut && retryCount > 0 {
+            // Retry on timeout (handles Render cold starts)
+            print("Request timed out, retrying... (\(retryCount) retries left)")
+            return try await self.request(endpoint, method: method, body: body, requiresAuth: requiresAuth, retryCount: retryCount - 1)
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
