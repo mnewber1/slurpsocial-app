@@ -247,8 +247,34 @@ class EditProfileViewController: UIViewController {
 
         saveButton.showLoading()
 
-        // TODO: Upload image to server and get URL
-        // For now, just update text fields
+        // First upload image if selected, then update profile
+        if let selectedImage = selectedImage {
+            uploadProfileImage(selectedImage) { [weak self] success in
+                if success {
+                    self?.updateProfileDetails(displayName: displayName, bio: bio)
+                } else {
+                    self?.saveButton.hideLoading()
+                }
+            }
+        } else {
+            updateProfileDetails(displayName: displayName, bio: bio)
+        }
+    }
+
+    private func uploadProfileImage(_ image: UIImage, completion: @escaping (Bool) -> Void) {
+        AuthenticationService.shared.uploadProfileImage(image) { [weak self] result in
+            switch result {
+            case .success:
+                completion(true)
+            case .failure(let error):
+                self?.saveButton.hideLoading()
+                self?.showError(error.localizedDescription)
+                completion(false)
+            }
+        }
+    }
+
+    private func updateProfileDetails(displayName: String, bio: String?) {
         AuthenticationService.shared.updateProfile(
             displayName: displayName,
             bio: bio,

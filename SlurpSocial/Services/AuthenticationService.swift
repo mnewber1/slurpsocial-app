@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 class AuthenticationService {
     static let shared = AuthenticationService()
@@ -238,6 +239,100 @@ class AuthenticationService {
         refreshCurrentUser()
     }
 
+    func uploadProfileImage(_ image: UIImage, completion: @escaping (Result<User, AuthError>) -> Void) {
+        guard currentUser != nil else {
+            completion(.failure(.notLoggedIn))
+            return
+        }
+
+        // Compress image to JPEG
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            completion(.failure(.unknown))
+            return
+        }
+
+        // Check size (max 5MB)
+        if imageData.count > 5 * 1024 * 1024 {
+            completion(.failure(.imageTooLarge))
+            return
+        }
+
+        // Convert to base64
+        let base64String = imageData.base64EncodedString()
+
+        Task {
+            do {
+                let response: APIResponse<UserDTO> = try await api.request(
+                    "/users/me/profile-image/base64",
+                    method: .POST,
+                    body: ["imageData": base64String],
+                    requiresAuth: true
+                )
+
+                guard let userData = response.data else {
+                    await MainActor.run {
+                        completion(.failure(.unknown))
+                    }
+                    return
+                }
+
+                let updatedUser = userData.toUser()
+
+                await MainActor.run {
+                    self.currentUser = updatedUser
+                    completion(.success(updatedUser))
+                }
+            } catch let error as APIError {
+                await MainActor.run {
+                    completion(.failure(self.mapAPIError(error)))
+                }
+            } catch {
+                await MainActor.run {
+                    completion(.failure(.unknown))
+                }
+            }
+        }
+    }
+
+    func deleteProfileImage(completion: @escaping (Result<User, AuthError>) -> Void) {
+        guard currentUser != nil else {
+            completion(.failure(.notLoggedIn))
+            return
+        }
+
+        Task {
+            do {
+                let response: APIResponse<UserDTO> = try await api.request(
+                    "/users/me/profile-image",
+                    method: .DELETE,
+                    requiresAuth: true
+                )
+
+                guard let userData = response.data else {
+                    await MainActor.run {
+                        completion(.failure(.unknown))
+                    }
+                    return
+                }
+
+                let updatedUser = userData.toUser()
+
+                await MainActor.run {
+                    self.currentUser = updatedUser
+                    completion(.success(updatedUser))
+                }
+            } catch let error as APIError {
+                await MainActor.run {
+                    completion(.failure(self.mapAPIError(error)))
+                }
+            } catch {
+                await MainActor.run {
+                    completion(.failure(.unknown))
+                }
+            }
+        }
+    }
+
     // MARK: - Private Methods
 
     private func loadCurrentUser() {
@@ -279,6 +374,10 @@ class AuthenticationService {
             return .wrongPassword
         case "notLoggedIn", "unauthorized":
             return .notLoggedIn
+        case "imageTooLarge":
+            return .imageTooLarge
+        case "invalidImageType":
+            return .invalidImageType
         default:
             return .unknown
         }
@@ -347,6 +446,8 @@ enum AuthError: LocalizedError {
     case wrongPassword
     case notLoggedIn
     case networkError
+    case imageTooLarge
+    case invalidImageType
     case unknown
 
     var errorDescription: String? {
@@ -369,6 +470,10 @@ enum AuthError: LocalizedError {
             return "You must be logged in to perform this action"
         case .networkError:
             return "Network error. Please check your connection"
+        case .imageTooLarge:
+            return "Image is too large. Maximum size is 5MB"
+        case .invalidImageType:
+            return "Invalid image format"
         case .unknown:
             return "An unknown error occurred"
         }
