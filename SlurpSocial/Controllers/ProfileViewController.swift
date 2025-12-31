@@ -258,13 +258,49 @@ class ProfileViewController: UIViewController {
             formatter.dateFormat = "MMM yyyy"
             joinDateView.configure(value: formatter.string(from: user.joinDate), label: "Joined")
 
+            // Load profile image
+            loadProfileImage(for: user)
+
             loadUserPosts(userId: user.id)
         }
     }
 
+    private func loadProfileImage(for user: User) {
+        // Reset to placeholder first
+        profileImageView.image = UIImage(systemName: "person.circle.fill")
+
+        guard let urlString = user.profileImageURL else { return }
+
+        // Build full URL if it's a relative path
+        let fullURLString: String
+        if urlString.hasPrefix("/") {
+            fullURLString = "https://slurpsocial.app\(urlString)"
+        } else {
+            fullURLString = urlString
+        }
+
+        guard let url = URL(string: fullURLString) else { return }
+
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let data = data, let image = UIImage(data: data) else { return }
+            DispatchQueue.main.async {
+                self?.profileImageView.image = image
+            }
+        }.resume()
+    }
+
     private func loadUserPosts(userId: UUID) {
-        userPosts = RamenPostService.shared.getPostsForUser(userId: userId)
-        collectionView.reloadData()
+        RamenPostService.shared.getPostsForUser(userId: userId) { [weak self] result in
+            switch result {
+            case .success(let posts):
+                self?.userPosts = posts
+                self?.collectionView.reloadData()
+            case .failure:
+                // Silently fail - user will see empty grid
+                self?.userPosts = []
+                self?.collectionView.reloadData()
+            }
+        }
     }
 
     // MARK: - Actions
