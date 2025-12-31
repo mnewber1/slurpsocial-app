@@ -9,25 +9,89 @@ import UIKit
 
 class FeedViewController: UIViewController {
 
-    private let tableView = UITableView()
-    private let refreshControl = UIRefreshControl()
-    private var posts: [RamenPost] = []
+    // MARK: - Properties
 
-    private let emptyStateLabel: UILabel = {
-        let label = UILabel()
-        label.text = "No ramen posts yet!\nBe the first to share your bowl 🍜"
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        label.textColor = .secondaryLabel
-        label.font = .systemFont(ofSize: 16)
-        label.isHidden = true
-        return label
+    private var posts: [RamenPost] = []
+    private var isLoading = false
+    private var currentSortOption: SortOption = .newest
+
+    enum SortOption: String, CaseIterable {
+        case newest = "Newest"
+        case topRated = "Top Rated"
+        case mostLiked = "Most Liked"
+    }
+
+    // MARK: - UI Elements
+
+    private lazy var tableView: UITableView = {
+        let tv = UITableView()
+        tv.delegate = self
+        tv.dataSource = self
+        tv.register(RamenPostCell.self, forCellReuseIdentifier: RamenPostCell.identifier)
+        tv.rowHeight = UITableView.automaticDimension
+        tv.estimatedRowHeight = 400
+        tv.separatorStyle = .none
+        tv.backgroundColor = Theme.Colors.groupedBackground
+        tv.translatesAutoresizingMaskIntoConstraints = false
+        return tv
     }()
+
+    private lazy var refreshControl: UIRefreshControl = {
+        let rc = UIRefreshControl()
+        rc.tintColor = Theme.Colors.primary
+        rc.addTarget(self, action: #selector(refreshPosts), for: .valueChanged)
+        return rc
+    }()
+
+    private lazy var emptyStateView: UIView = {
+        let view = UIView()
+        view.isHidden = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+
+        let imageView = UIImageView(image: UIImage(systemName: "bowl.fill"))
+        imageView.tintColor = Theme.Colors.tertiaryText
+        imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = "No ramen posts yet!"
+        label.font = Theme.Typography.headline
+        label.textColor = Theme.Colors.secondaryText
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        let sublabel = UILabel()
+        sublabel.text = "Be the first to share your bowl"
+        sublabel.font = Theme.Typography.subheadline
+        sublabel.textColor = Theme.Colors.tertiaryText
+        sublabel.textAlignment = .center
+        sublabel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(imageView)
+        view.addSubview(label)
+        view.addSubview(sublabel)
+
+        NSLayoutConstraint.activate([
+            imageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            imageView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -40),
+            imageView.widthAnchor.constraint(equalToConstant: 80),
+            imageView.heightAnchor.constraint(equalToConstant: 80),
+
+            label.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: Theme.Spacing.lg),
+            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            sublabel.topAnchor.constraint(equalTo: label.bottomAnchor, constant: Theme.Spacing.sm),
+            sublabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        ])
+
+        return view
+    }()
+
+    // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        setupTableView()
         loadPosts()
 
         NotificationCenter.default.addObserver(self, selector: #selector(postsDidUpdate), name: .postsUpdated, object: nil)
@@ -35,20 +99,29 @@ class FeedViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        loadPosts()
+        // Soft refresh on appear
+        if !posts.isEmpty {
+            loadPosts(showLoading: false)
+        }
     }
+
+    // MARK: - Setup
 
     private func setupUI() {
         title = "Slurp Social"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = Theme.Colors.groupedBackground
 
         navigationController?.navigationBar.prefersLargeTitles = true
+        navigationController?.navigationBar.tintColor = Theme.Colors.primary
+
+        // Sort button
+        let sortButton = UIBarButtonItem(image: UIImage(systemName: "arrow.up.arrow.down"), style: .plain, target: self, action: #selector(showSortOptions))
+        navigationItem.rightBarButtonItem = sortButton
 
         view.addSubview(tableView)
-        view.addSubview(emptyStateLabel)
+        view.addSubview(emptyStateView)
 
-        tableView.translatesAutoresizingMaskIntoConstraints = false
-        emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
+        tableView.refreshControl = refreshControl
 
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -56,43 +129,98 @@ class FeedViewController: UIViewController {
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            emptyStateLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            emptyStateLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            emptyStateLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            emptyStateLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
+            emptyStateView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
     }
 
-    private func setupTableView() {
-        tableView.delegate = self
-        tableView.dataSource = self
-        tableView.register(RamenPostCell.self, forCellReuseIdentifier: RamenPostCell.identifier)
-        tableView.rowHeight = UITableView.automaticDimension
-        tableView.estimatedRowHeight = 400
-        tableView.separatorStyle = .none
+    // MARK: - Data Loading
 
-        refreshControl.addTarget(self, action: #selector(refreshPosts), for: .valueChanged)
-        tableView.refreshControl = refreshControl
+    private func loadPosts(showLoading: Bool = true) {
+        guard !isLoading else { return }
+        isLoading = true
+
+        if showLoading && posts.isEmpty {
+            self.showLoading(message: "Loading posts...")
+        }
+
+        RamenPostService.shared.getAllPosts { [weak self] result in
+            self?.isLoading = false
+            self?.hideLoading()
+            self?.refreshControl.endRefreshing()
+
+            switch result {
+            case .success(var fetchedPosts):
+                // Apply sort
+                self?.sortPosts(&fetchedPosts)
+                self?.posts = fetchedPosts
+                self?.updateUI()
+
+            case .failure(let error):
+                if self?.posts.isEmpty ?? true {
+                    self?.showError(error.localizedDescription) {
+                        self?.loadPosts()
+                    }
+                }
+            }
+        }
     }
 
-    private func loadPosts() {
-        posts = RamenPostService.shared.getAllPosts()
-        tableView.reloadData()
-        updateEmptyState()
+    private func sortPosts(_ posts: inout [RamenPost]) {
+        switch currentSortOption {
+        case .newest:
+            posts.sort { $0.createdAt > $1.createdAt }
+        case .topRated:
+            posts.sort { $0.rating > $1.rating }
+        case .mostLiked:
+            posts.sort { $0.likes > $1.likes }
+        }
     }
 
-    private func updateEmptyState() {
-        emptyStateLabel.isHidden = !posts.isEmpty
+    private func updateUI() {
+        emptyStateView.isHidden = !posts.isEmpty
         tableView.isHidden = posts.isEmpty
+        tableView.reloadData()
     }
+
+    // MARK: - Actions
 
     @objc private func refreshPosts() {
-        loadPosts()
-        refreshControl.endRefreshing()
+        loadPosts(showLoading: false)
     }
 
     @objc private func postsDidUpdate() {
-        loadPosts()
+        loadPosts(showLoading: false)
+    }
+
+    @objc private func showSortOptions() {
+        let alert = UIAlertController(title: "Sort By", message: nil, preferredStyle: .actionSheet)
+
+        for option in SortOption.allCases {
+            let action = UIAlertAction(title: option.rawValue, style: .default) { [weak self] _ in
+                self?.currentSortOption = option
+                var sorted = self?.posts ?? []
+                self?.sortPosts(&sorted)
+                self?.posts = sorted
+                self?.tableView.reloadData()
+            }
+
+            if option == currentSortOption {
+                action.setValue(true, forKey: "checked")
+            }
+
+            alert.addAction(action)
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let popover = alert.popoverPresentationController {
+            popover.barButtonItem = navigationItem.rightBarButtonItem
+        }
+
+        present(alert, animated: true)
     }
 
     deinit {
@@ -114,10 +242,7 @@ extension FeedViewController: UITableViewDataSource {
 
         let post = posts[indexPath.row]
         cell.configure(with: post)
-        cell.onLikeTapped = { [weak self] in
-            RamenPostService.shared.likePost(post.id)
-            self?.loadPosts()
-        }
+        cell.delegate = self
 
         return cell
     }
@@ -132,5 +257,37 @@ extension FeedViewController: UITableViewDelegate {
         let post = posts[indexPath.row]
         let detailVC = PostDetailViewController(post: post)
         navigationController?.pushViewController(detailVC, animated: true)
+    }
+}
+
+// MARK: - RamenPostCellDelegate
+
+extension FeedViewController: RamenPostCellDelegate {
+    func didTapLike(for post: RamenPost) {
+        guard AuthenticationService.shared.isLoggedIn else {
+            showError("Please log in to like posts")
+            return
+        }
+
+        RamenPostService.shared.likePost(post.id) { [weak self] result in
+            if case .success = result {
+                self?.loadPosts(showLoading: false)
+            }
+        }
+    }
+
+    func didTapComment(for post: RamenPost) {
+        let commentsVC = CommentsViewController(post: post)
+        navigationController?.pushViewController(commentsVC, animated: true)
+    }
+
+    func didTapBookmark(for post: RamenPost) {
+        guard AuthenticationService.shared.isLoggedIn else {
+            showError("Please log in to bookmark posts")
+            return
+        }
+
+        // TODO: Implement bookmark toggle
+        showSuccess("Bookmarked!")
     }
 }

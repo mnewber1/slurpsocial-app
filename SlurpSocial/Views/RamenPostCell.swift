@@ -7,20 +7,29 @@
 
 import UIKit
 
+protocol RamenPostCellDelegate: AnyObject {
+    func didTapLike(for post: RamenPost)
+    func didTapBookmark(for post: RamenPost)
+    func didTapComment(for post: RamenPost)
+}
+
+extension RamenPostCellDelegate {
+    func didTapBookmark(for post: RamenPost) {}
+    func didTapComment(for post: RamenPost) {}
+}
+
 class RamenPostCell: UITableViewCell {
 
     static let identifier = "RamenPostCell"
 
-    var onLikeTapped: (() -> Void)?
+    weak var delegate: RamenPostCellDelegate?
+    private var post: RamenPost?
 
     private let containerView: UIView = {
         let view = UIView()
-        view.backgroundColor = .systemBackground
-        view.layer.cornerRadius = 12
-        view.layer.shadowColor = UIColor.black.cgColor
-        view.layer.shadowOpacity = 0.1
-        view.layer.shadowOffset = CGSize(width: 0, height: 2)
-        view.layer.shadowRadius = 4
+        view.backgroundColor = Theme.Colors.cardBackground
+        view.layer.cornerRadius = Theme.CornerRadius.medium
+        view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
 
@@ -28,31 +37,35 @@ class RamenPostCell: UITableViewCell {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
-        imageView.layer.cornerRadius = 12
+        imageView.layer.cornerRadius = Theme.CornerRadius.medium
         imageView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        imageView.backgroundColor = .systemGray5
+        imageView.backgroundColor = Theme.Colors.secondaryBackground
+        imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
 
     private let placeholderImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.image = UIImage(systemName: "bowl.fill")
-        imageView.tintColor = .systemGray3
+        imageView.tintColor = Theme.Colors.tertiaryText
         imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
         return imageView
     }()
 
     private let restaurantLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 18, weight: .bold)
-        label.textColor = .label
+        label.font = Theme.Typography.headline
+        label.textColor = Theme.Colors.text
+        label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
     private let ramenNameLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .secondaryLabel
+        label.font = Theme.Typography.subheadline
+        label.textColor = Theme.Colors.secondaryText
+        label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
@@ -60,53 +73,84 @@ class RamenPostCell: UITableViewCell {
         let stack = UIStackView()
         stack.axis = .horizontal
         stack.spacing = 2
+        stack.translatesAutoresizingMaskIntoConstraints = false
         return stack
     }()
 
     private let brothTypeLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 12)
+        label.font = Theme.Typography.caption1
         label.textColor = .white
-        label.backgroundColor = UIColor(red: 0.85, green: 0.2, blue: 0.2, alpha: 1.0)
+        label.backgroundColor = Theme.Colors.brothTag
         label.layer.cornerRadius = 8
         label.clipsToBounds = true
         label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
     private let reviewLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 14)
-        label.textColor = .label
+        label.font = Theme.Typography.subheadline
+        label.textColor = Theme.Colors.text
         label.numberOfLines = 2
-        return label
-    }()
-
-    private let likeButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: "heart"), for: .normal)
-        button.tintColor = .systemRed
-        return button
-    }()
-
-    private let likeCountLabel: UILabel = {
-        let label = UILabel()
-        label.font = .systemFont(ofSize: 12)
-        label.textColor = .secondaryLabel
-        return label
-    }()
-
-    private let dateLabel: UILabel = {
-        let label = UILabel()
-        label.font = .systemFont(ofSize: 12)
-        label.textColor = .tertiaryLabel
+        label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
     private let locationLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 12)
-        label.textColor = .secondaryLabel
+        label.font = Theme.Typography.caption1
+        label.textColor = Theme.Colors.secondaryText
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    private lazy var actionStackView: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = Theme.Spacing.lg
+        stack.alignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        return stack
+    }()
+
+    private lazy var likeButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "heart"), for: .normal)
+        button.tintColor = Theme.Colors.error
+        button.addTarget(self, action: #selector(likeTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private let likeCountLabel: UILabel = {
+        let label = UILabel()
+        label.font = Theme.Typography.caption1
+        label.textColor = Theme.Colors.secondaryText
+        return label
+    }()
+
+    private lazy var commentButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "bubble.right"), for: .normal)
+        button.tintColor = Theme.Colors.primary
+        button.addTarget(self, action: #selector(commentTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var bookmarkButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "bookmark"), for: .normal)
+        button.tintColor = Theme.Colors.secondary
+        button.addTarget(self, action: #selector(bookmarkTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private let dateLabel: UILabel = {
+        let label = UILabel()
+        label.font = Theme.Typography.caption2
+        label.textColor = Theme.Colors.tertiaryText
+        label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
@@ -122,7 +166,7 @@ class RamenPostCell: UITableViewCell {
     private func setupUI() {
         selectionStyle = .none
         backgroundColor = .clear
-        contentView.backgroundColor = .systemGroupedBackground
+        contentView.backgroundColor = Theme.Colors.groupedBackground
 
         contentView.addSubview(containerView)
         containerView.addSubview(ramenImageView)
@@ -132,29 +176,23 @@ class RamenPostCell: UITableViewCell {
         containerView.addSubview(ratingStackView)
         containerView.addSubview(brothTypeLabel)
         containerView.addSubview(reviewLabel)
-        containerView.addSubview(likeButton)
-        containerView.addSubview(likeCountLabel)
-        containerView.addSubview(dateLabel)
         containerView.addSubview(locationLabel)
+        containerView.addSubview(actionStackView)
+        containerView.addSubview(dateLabel)
 
-        containerView.translatesAutoresizingMaskIntoConstraints = false
-        ramenImageView.translatesAutoresizingMaskIntoConstraints = false
-        placeholderImageView.translatesAutoresizingMaskIntoConstraints = false
-        restaurantLabel.translatesAutoresizingMaskIntoConstraints = false
-        ramenNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        ratingStackView.translatesAutoresizingMaskIntoConstraints = false
-        brothTypeLabel.translatesAutoresizingMaskIntoConstraints = false
-        reviewLabel.translatesAutoresizingMaskIntoConstraints = false
-        likeButton.translatesAutoresizingMaskIntoConstraints = false
-        likeCountLabel.translatesAutoresizingMaskIntoConstraints = false
-        dateLabel.translatesAutoresizingMaskIntoConstraints = false
-        locationLabel.translatesAutoresizingMaskIntoConstraints = false
+        // Action stack items
+        let likeStack = createActionItem(button: likeButton, label: likeCountLabel)
+        actionStackView.addArrangedSubview(likeStack)
+        actionStackView.addArrangedSubview(commentButton)
+        actionStackView.addArrangedSubview(bookmarkButton)
+
+        Theme.Shadow.applyCard(to: containerView)
 
         NSLayoutConstraint.activate([
-            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Theme.Spacing.sm),
+            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Theme.Spacing.lg),
+            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Theme.Spacing.lg),
+            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -Theme.Spacing.sm),
 
             ramenImageView.topAnchor.constraint(equalTo: containerView.topAnchor),
             ramenImageView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
@@ -166,56 +204,58 @@ class RamenPostCell: UITableViewCell {
             placeholderImageView.widthAnchor.constraint(equalToConstant: 60),
             placeholderImageView.heightAnchor.constraint(equalToConstant: 60),
 
-            restaurantLabel.topAnchor.constraint(equalTo: ramenImageView.bottomAnchor, constant: 12),
-            restaurantLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
-            restaurantLabel.trailingAnchor.constraint(equalTo: ratingStackView.leadingAnchor, constant: -8),
+            restaurantLabel.topAnchor.constraint(equalTo: ramenImageView.bottomAnchor, constant: Theme.Spacing.md),
+            restaurantLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Theme.Spacing.md),
+            restaurantLabel.trailingAnchor.constraint(equalTo: ratingStackView.leadingAnchor, constant: -Theme.Spacing.sm),
 
             ratingStackView.centerYAnchor.constraint(equalTo: restaurantLabel.centerYAnchor),
-            ratingStackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
+            ratingStackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Theme.Spacing.md),
 
-            ramenNameLabel.topAnchor.constraint(equalTo: restaurantLabel.bottomAnchor, constant: 4),
-            ramenNameLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
-            ramenNameLabel.trailingAnchor.constraint(equalTo: brothTypeLabel.leadingAnchor, constant: -8),
+            ramenNameLabel.topAnchor.constraint(equalTo: restaurantLabel.bottomAnchor, constant: Theme.Spacing.xs),
+            ramenNameLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Theme.Spacing.md),
+            ramenNameLabel.trailingAnchor.constraint(equalTo: brothTypeLabel.leadingAnchor, constant: -Theme.Spacing.sm),
 
             brothTypeLabel.centerYAnchor.constraint(equalTo: ramenNameLabel.centerYAnchor),
-            brothTypeLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
+            brothTypeLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Theme.Spacing.md),
             brothTypeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 60),
-            brothTypeLabel.heightAnchor.constraint(equalToConstant: 20),
+            brothTypeLabel.heightAnchor.constraint(equalToConstant: 22),
 
-            reviewLabel.topAnchor.constraint(equalTo: ramenNameLabel.bottomAnchor, constant: 8),
-            reviewLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
-            reviewLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
+            reviewLabel.topAnchor.constraint(equalTo: ramenNameLabel.bottomAnchor, constant: Theme.Spacing.sm),
+            reviewLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Theme.Spacing.md),
+            reviewLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Theme.Spacing.md),
 
-            locationLabel.topAnchor.constraint(equalTo: reviewLabel.bottomAnchor, constant: 8),
-            locationLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
-            locationLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
+            locationLabel.topAnchor.constraint(equalTo: reviewLabel.bottomAnchor, constant: Theme.Spacing.sm),
+            locationLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Theme.Spacing.md),
+            locationLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Theme.Spacing.md),
 
-            likeButton.topAnchor.constraint(equalTo: locationLabel.bottomAnchor, constant: 8),
-            likeButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-            likeButton.widthAnchor.constraint(equalToConstant: 44),
-            likeButton.heightAnchor.constraint(equalToConstant: 44),
-            likeButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
+            actionStackView.topAnchor.constraint(equalTo: locationLabel.bottomAnchor, constant: Theme.Spacing.md),
+            actionStackView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Theme.Spacing.sm),
+            actionStackView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Theme.Spacing.md),
 
-            likeCountLabel.centerYAnchor.constraint(equalTo: likeButton.centerYAnchor),
-            likeCountLabel.leadingAnchor.constraint(equalTo: likeButton.trailingAnchor, constant: 0),
-
-            dateLabel.centerYAnchor.constraint(equalTo: likeButton.centerYAnchor),
-            dateLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12)
+            dateLabel.centerYAnchor.constraint(equalTo: actionStackView.centerYAnchor),
+            dateLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Theme.Spacing.md),
         ])
+    }
 
-        likeButton.addTarget(self, action: #selector(likeTapped), for: .touchUpInside)
+    private func createActionItem(button: UIButton, label: UILabel) -> UIStackView {
+        let stack = UIStackView(arrangedSubviews: [button, label])
+        stack.axis = .horizontal
+        stack.spacing = 2
+        stack.alignment = .center
+        return stack
     }
 
     func configure(with post: RamenPost) {
+        self.post = post
+
         restaurantLabel.text = post.restaurantName
         ramenNameLabel.text = post.ramenName
         reviewLabel.text = post.review
+        reviewLabel.isHidden = post.review?.isEmpty ?? true
         likeCountLabel.text = "\(post.likes)"
 
-        // Configure rating stars
         configureRating(post.rating)
 
-        // Configure broth type
         if let broth = post.brothType {
             brothTypeLabel.text = "  \(broth.rawValue)  "
             brothTypeLabel.isHidden = false
@@ -223,16 +263,17 @@ class RamenPostCell: UITableViewCell {
             brothTypeLabel.isHidden = true
         }
 
-        // Configure image
-        if let image = RamenPostService.shared.loadImage(for: post) {
-            ramenImageView.image = image
-            placeholderImageView.isHidden = true
-        } else {
-            ramenImageView.image = nil
-            placeholderImageView.isHidden = false
+        // Load image async
+        placeholderImageView.isHidden = false
+        ramenImageView.image = nil
+
+        RamenPostService.shared.loadImage(for: post) { [weak self] image in
+            if let image = image {
+                self?.ramenImageView.image = image
+                self?.placeholderImageView.isHidden = true
+            }
         }
 
-        // Configure location
         if let address = post.address {
             locationLabel.text = "📍 \(address)"
             locationLabel.isHidden = false
@@ -240,7 +281,6 @@ class RamenPostCell: UITableViewCell {
             locationLabel.isHidden = true
         }
 
-        // Configure date
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         dateLabel.text = formatter.localizedString(for: post.createdAt, relativeTo: Date())
@@ -255,13 +295,13 @@ class RamenPostCell: UITableViewCell {
 
             if Double(i) <= rating {
                 starImageView.image = UIImage(systemName: "star.fill")
-                starImageView.tintColor = .systemOrange
+                starImageView.tintColor = Theme.Colors.starFilled
             } else if Double(i) - 0.5 <= rating {
                 starImageView.image = UIImage(systemName: "star.leadinghalf.filled")
-                starImageView.tintColor = .systemOrange
+                starImageView.tintColor = Theme.Colors.starFilled
             } else {
                 starImageView.image = UIImage(systemName: "star")
-                starImageView.tintColor = .systemGray3
+                starImageView.tintColor = Theme.Colors.starEmpty
             }
 
             starImageView.widthAnchor.constraint(equalToConstant: 16).isActive = true
@@ -270,14 +310,48 @@ class RamenPostCell: UITableViewCell {
         }
     }
 
+    // MARK: - Actions
+
     @objc private func likeTapped() {
-        onLikeTapped?()
+        guard let post = post else { return }
+
+        // Animate
+        UIView.animate(withDuration: 0.1, animations: {
+            self.likeButton.transform = CGAffineTransform(scaleX: 1.3, y: 1.3)
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.likeButton.transform = .identity
+            }
+        }
+
+        delegate?.didTapLike(for: post)
+    }
+
+    @objc private func commentTapped() {
+        guard let post = post else { return }
+        delegate?.didTapComment(for: post)
+    }
+
+    @objc private func bookmarkTapped() {
+        guard let post = post else { return }
+
+        // Animate
+        UIView.animate(withDuration: 0.1, animations: {
+            self.bookmarkButton.transform = CGAffineTransform(scaleX: 1.3, y: 1.3)
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                self.bookmarkButton.transform = .identity
+            }
+        }
+
+        delegate?.didTapBookmark(for: post)
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         ramenImageView.image = nil
         placeholderImageView.isHidden = false
-        onLikeTapped = nil
+        post = nil
+        delegate = nil
     }
 }
