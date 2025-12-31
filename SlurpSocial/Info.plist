@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Slurp Social needs access to your camera to take photos of your ramen bowls.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Slurp Social needs access to your photo library to share photos of your ramen bowls.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Slurp Social uses your location to tag where you enjoyed your ramen and show nearby ramen spots on the map.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
