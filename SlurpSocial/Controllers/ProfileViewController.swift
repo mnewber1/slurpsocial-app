@@ -7,7 +7,7 @@
 
 import UIKit
 
-class ProfileViewController: UIViewController {
+class ProfileViewController: UIViewController, EditProfileDelegate {
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -113,6 +113,10 @@ class ProfileViewController: UIViewController {
         return UIBarButtonItem(title: "Logout", style: .plain, target: nil, action: nil)
     }()
 
+    private let editButton: UIBarButtonItem = {
+        return UIBarButtonItem(image: UIImage(systemName: "pencil"), style: .plain, target: nil, action: nil)
+    }()
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -135,6 +139,9 @@ class ProfileViewController: UIViewController {
 
         logoutButton.target = self
         logoutButton.action = #selector(logoutTapped)
+
+        editButton.target = self
+        editButton.action = #selector(editProfileTapped)
 
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
@@ -245,7 +252,7 @@ class ProfileViewController: UIViewController {
 
         scrollView.isHidden = !isLoggedIn
         loginPromptView.isHidden = isLoggedIn
-        navigationItem.rightBarButtonItem = isLoggedIn ? logoutButton : nil
+        navigationItem.rightBarButtonItems = isLoggedIn ? [logoutButton, editButton] : nil
 
         if let user = AuthenticationService.shared.currentUser {
             displayNameLabel.text = user.displayName
@@ -326,7 +333,20 @@ class ProfileViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @objc private func editProfileTapped() {
+        let editVC = EditProfileViewController()
+        editVC.delegate = self
+        let nav = UINavigationController(rootViewController: editVC)
+        present(nav, animated: true)
+    }
+
     @objc private func authStateChanged() {
+        updateUI()
+    }
+
+    // MARK: - EditProfileDelegate
+
+    func didUpdateProfile() {
         updateUI()
     }
 

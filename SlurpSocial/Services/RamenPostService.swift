@@ -100,21 +100,6 @@ class RamenPostService {
         }
     }
 
-    func getAllPosts() -> [RamenPost] {
-        // Synchronous wrapper - returns empty and fetches async
-        var result: [RamenPost] = []
-        let semaphore = DispatchSemaphore(value: 0)
-
-        getAllPosts { fetchResult in
-            if case .success(let posts) = fetchResult {
-                result = posts
-            }
-            semaphore.signal()
-        }
-
-        _ = semaphore.wait(timeout: .now() + 5)
-        return result
-    }
 
     func getPostsForUser(userId: UUID, completion: @escaping (Result<[RamenPost], Error>) -> Void) {
         Task {
@@ -143,20 +128,6 @@ class RamenPostService {
         }
     }
 
-    func getPostsForUser(userId: UUID) -> [RamenPost] {
-        var result: [RamenPost] = []
-        let semaphore = DispatchSemaphore(value: 0)
-
-        getPostsForUser(userId: userId) { fetchResult in
-            if case .success(let posts) = fetchResult {
-                result = posts
-            }
-            semaphore.signal()
-        }
-
-        _ = semaphore.wait(timeout: .now() + 5)
-        return result
-    }
 
     func getPost(byId id: UUID, completion: @escaping (Result<RamenPost, Error>) -> Void) {
         Task {
@@ -185,20 +156,6 @@ class RamenPostService {
         }
     }
 
-    func getPost(byId id: UUID) -> RamenPost? {
-        var result: RamenPost? = nil
-        let semaphore = DispatchSemaphore(value: 0)
-
-        getPost(byId: id) { fetchResult in
-            if case .success(let post) = fetchResult {
-                result = post
-            }
-            semaphore.signal()
-        }
-
-        _ = semaphore.wait(timeout: .now() + 5)
-        return result
-    }
 
     func updatePost(_ post: RamenPost, completion: @escaping (Result<RamenPost, Error>) -> Void) {
         let request = CreatePostRequest(
