@@ -87,24 +87,35 @@ class MapViewController: UIViewController {
         let existingAnnotations = mapView.annotations.filter { !($0 is MKUserLocation) }
         mapView.removeAnnotations(existingAnnotations)
 
-        // Load posts with location
-        posts = RamenPostService.shared.getAllPosts().filter { $0.coordinate != nil }
+        // Load posts with location asynchronously
+        RamenPostService.shared.getAllPosts { [weak self] result in
+            guard let self = self else { return }
 
-        // Add annotations
-        for post in posts {
-            guard let coordinate = post.coordinate else { continue }
+            switch result {
+            case .success(let allPosts):
+                self.posts = allPosts.filter { $0.coordinate != nil }
 
-            let annotation = RamenAnnotation(post: post)
-            annotation.coordinate = coordinate
-            annotation.title = post.restaurantName
-            annotation.subtitle = "\(post.ramenName) - \(String(format: "%.1f", post.rating))⭐"
-            mapView.addAnnotation(annotation)
-        }
+                // Add annotations
+                for post in self.posts {
+                    guard let coordinate = post.coordinate else { continue }
 
-        // Zoom to show all annotations if we have any
-        if !posts.isEmpty {
-            let annotations = mapView.annotations.filter { !($0 is MKUserLocation) }
-            mapView.showAnnotations(annotations, animated: true)
+                    let annotation = RamenAnnotation(post: post)
+                    annotation.coordinate = coordinate
+                    annotation.title = post.restaurantName
+                    annotation.subtitle = "\(post.ramenName) - \(String(format: "%.1f", post.rating))⭐"
+                    self.mapView.addAnnotation(annotation)
+                }
+
+                // Zoom to show all annotations if we have any
+                if !self.posts.isEmpty {
+                    let annotations = self.mapView.annotations.filter { !($0 is MKUserLocation) }
+                    self.mapView.showAnnotations(annotations, animated: true)
+                }
+
+            case .failure:
+                // Silently fail
+                self.posts = []
+            }
         }
     }
 
